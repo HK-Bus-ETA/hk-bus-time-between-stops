@@ -6,6 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from json import JSONDecodeError
+from pytz import timezone
 
 from eta import HKEta
 
@@ -47,6 +48,46 @@ def haversine(lat1, lon1, lat2, lon2):
     return 6371.0 * c
 
 
+def current_hour():
+    now_time = datetime.now(timezone('Asia/Hong_Kong'))
+    return now_time.strftime('%H')
+
+
+def current_weekday():
+    now_time = datetime.now(timezone('Asia/Hong_Kong'))
+    return now_time.strftime('%w')
+
+
+def write_file(file_path, stop_id1, stop_id2, diff, distance):
+    with file_lock:
+        dir_name = os.path.dirname(file_path)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+        data = {stop_id1: {stop_id2: diff}}
+        try:
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+                if stop_id1 in data:
+                    times = data[stop_id1]
+                    if stop_id2 in times:
+                        time = times[stop_id2]
+                        if time < 0 or (distance > 1.5 and time < min(2.0, diff)):
+                            times[stop_id2] = diff
+                        else:
+                            diff = (time * 9 + diff) / 10
+                            times[stop_id2] = diff
+                    else:
+                        times[stop_id2] = diff
+                else:
+                    data[stop_id1] = {stop_id2: diff}
+        except FileNotFoundError:
+            pass
+        except JSONDecodeError:
+            pass
+        with open(file_path, 'w') as file:
+            json.dump(data, file)
+
+
 def run():
     key, route = random.choice(routes)
     if "stops" not in route:
@@ -80,35 +121,13 @@ def run():
     if "lightRail" in route["co"]:
         diff = max(120.0, diff)
 
-    with file_lock:
-        file_path = "times/" + stop_id1[0:2] + ".json"
-        dir_name = os.path.dirname(file_path)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name, exist_ok=True)
-        data = {stop_id1: {stop_id2: diff}}
-        try:
-            with open(file_path, 'r') as file:
-                data = json.load(file)
-                if stop_id1 in data:
-                    times = data[stop_id1]
-                    if stop_id2 in times:
-                        time = times[stop_id2]
-                        if time < 0 or (distance > 1.5 and time < min(2.0, diff)):
-                            times[stop_id2] = diff
-                        else:
-                            diff = (time * 9 + diff) / 10
-                            times[stop_id2] = diff
-                    else:
-                        times[stop_id2] = diff
-                else:
-                    data[stop_id1] = {stop_id2: diff}
-        except FileNotFoundError:
-            pass
-        except JSONDecodeError:
-            pass
-        with open(file_path, 'w') as file:
-            json.dump(data, file)
-    print(f"{f'{stop_id1} > {stop_id2}':<35} {distance:.2f}km {(diff / 60):.2f}mins")
+    prefix = stop_id1[0:2]
+    hour = current_hour()
+    weekday = current_weekday()
+    write_file(f"times/{prefix}.json", stop_id1, stop_id2, diff, distance)
+    write_file(f"times_hourly/{weekday}/{hour}/{prefix}.json", stop_id1, stop_id2, diff, distance)
+
+    print(f"Weekday {weekday} Hour {hour}: {f'{stop_id1} > {stop_id2}':<35} {distance:.2f}km {(diff / 60):.2f}mins")
 
 
 def run_repeatedly():
