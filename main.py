@@ -55,6 +55,9 @@ def current_hour():
 
 def current_weekday():
     now_time = datetime.now(timezone('Asia/Hong_Kong'))
+    now_date = now_time.strftime('%Y%m%d')
+    if now_date in hketa.holidays:
+        return '0'
     return now_time.strftime('%w')
 
 
