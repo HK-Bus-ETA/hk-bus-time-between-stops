@@ -1,6 +1,6 @@
 # hk-bus-time-between-stops
  
-This repository hosts an **experimental attempt** to fetch and calculate the journey times between bus stops and MTR/Light Rail stations where services are available in Hong Kong.
+This repository hosts an **experimental attempt** to fetch and calculate the estimated journey times between bus stops, MTR Stations and Light Rail stops where ETA services are available in Hong Kong. The results seems to be quite close to the official estimates from the transport operators.
 
 It essentially works by looking at the distance between stops/stations and the ETA difference between them on services the stops at them consecutively. Values are averaged out over time in hopes of getting more and more accurate.
 
@@ -9,7 +9,7 @@ The code is being executed on an external server 24/7 and its results are pushed
 Example request: https://timeinterval.hkbuseta.com/times/07.json
 
 ## Disclaimer
-As this is an **experimental attempt**, please **expect inaccuracies**, especially to highly frequent & busy services.
+As this is an **experimental attempt**, please **expect inaccuracies**, especially to highly frequent & busy services, although the results seems to be quite close to offical estimates.
 
 ## Credits
 Many thanks to `HK Bus Crawling@2021, https://github.com/hkbus/hk-bus-crawling`
