@@ -91,8 +91,28 @@ def write_file(file_path, stop_id1, stop_id2, diff, distance):
             json.dump(data, file)
 
 
+def has_numbers(input_string):
+    return any(char.isdigit() for char in input_string)
+
+
+def roll_chance(route, info):
+    route_number = route["route"]
+    hour = int(current_hour())
+    if not any(char.isdigit() for char in route_number):
+        return True
+    chance = 1
+    if 2 <= hour < 5:
+        if not (route_number.startswith("N") or route_number.endswith("S")):
+            chance = 0.01
+    info[0] = chance
+    return chance >= 1 or random.uniform(0, 1) >= chance
+
+
 def run():
     key, route = random.choice(routes)
+    info = [1]
+    while not roll_chance(route, info):
+        key, route = random.choice(routes)
     if "stops" not in route:
         return
     stops = route["stops"]
@@ -130,7 +150,9 @@ def run():
     write_file(f"times/{prefix}.json", stop_id1, stop_id2, diff, distance)
     write_file(f"times_hourly/{weekday}/{hour}/{prefix}.json", stop_id1, stop_id2, diff, distance)
 
-    print(f"Weekday {weekday} Hour {hour}: {f'{stop_id1} > {stop_id2}':<35} {distance:.2f}km {(diff / 60):.2f}mins")
+    route_number = route["route"]
+    chance = info[0]
+    print(f"WD{weekday} H{hour}: {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(diff / 60):.2f}':>5}mins")
 
 
 def run_repeatedly():
