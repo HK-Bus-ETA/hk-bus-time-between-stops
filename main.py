@@ -61,6 +61,28 @@ def current_weekday():
     return now_time.strftime('%w')
 
 
+def read_file(file_path, stop_id1, stop_id2):
+    dir_name = os.path.dirname(file_path)
+    if not os.path.exists(dir_name):
+        return None
+    try:
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+            if stop_id1 in data:
+                times = data[stop_id1]
+                if stop_id2 in times:
+                    return times[stop_id2]
+                else:
+                    return None
+            else:
+                return None
+    except FileNotFoundError:
+        pass
+    except JSONDecodeError:
+        pass
+    return None
+
+
 def write_file(file_path, stop_id1, stop_id2, diff, distance):
     with file_lock:
         dir_name = os.path.dirname(file_path)
@@ -131,13 +153,20 @@ def run():
     if distance > 1.5:
         diff = distance / 0.013636
     else:
-        etas1 = hketa.getEtas(route_id=key, seq=stop_index, language="en")
-        etas2 = hketa.getEtas(route_id=key, seq=stop_index + 1, language="en")
-        if etas1 is None or etas2 is None or len(etas1) == 0 or len(etas2) == 0 or etas1[0]["eta"] is None or etas2[0]["eta"] is None:
-            return
-        eta_time1 = etas1[0]["eta"]
-        eta_time2 = etas2[0]["eta"]
-        diff = seconds_diff(eta_time1, eta_time2)
+        if ("mtr" in route["co"] or "lightRail" in route["co"]) and stop_index + 2 >= len(stop_ids):
+            prefix = stop_id2[0:2]
+            diff = read_file(f"times/{prefix}.json", stop_id2, stop_id1)
+            if diff is None:
+                return
+        else:
+            etas1 = hketa.getEtas(route_id=key, seq=stop_index, language="en")
+            etas2 = hketa.getEtas(route_id=key, seq=stop_index + 1, language="en")
+            if etas1 is None or etas2 is None or len(etas1) == 0 or len(etas2) == 0 or etas1[0]["eta"] is None or \
+                    etas2[0]["eta"] is None:
+                return
+            eta_time1 = etas1[0]["eta"]
+            eta_time2 = etas2[0]["eta"]
+            diff = seconds_diff(eta_time1, eta_time2)
     if diff < 0:
         return
     diff *= 1.1
