@@ -10,6 +10,18 @@ The code is being executed on an external server 24/7 and its results are pushed
 Get the journey times to all next stops from Battery Street Jordan (**07**6E1E9D5874C41D)<br>
 Request: https://timeinterval.hkbuseta.com/times/07.json
 
+Alternatively, you can fetch the page that contains all journey times<br>
+Request: https://timeinterval.hkbuseta.com/times/all.json
+
+### Example hourly request 
+**Missing journey times for hourly requests are normal, you are advised to fallback to the average journey time using the regular request above.**
+
+Get the journey times to all next stops from Battery Street Jordan (**07**6E1E9D5874C41D) **on Monday from 10:00 - 10:59**<br>
+Request: https://timeinterval.hkbuseta.com/times_hourly/1/10/07.json
+
+Alternatively, you can fetch the page that contains all journey times in that hour<br>
+Request: https://timeinterval.hkbuseta.com/times_hourly/1/10/all.json
+
 ## Disclaimer
 As this is an **experimental attempt**, please **expect inaccuracies**, especially to highly frequent & busy services, although the results seems to be quite close to offical estimates.
 
