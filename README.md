@@ -4,7 +4,7 @@ This repository hosts an **experimental attempt** to fetch and calculate the est
 
 It essentially works by looking at the distance between stops/stations and the ETA difference between them on services the stops at them consecutively. Values are averaged out over time in hopes of getting more and more accurate.
 
-The code is being executed on an external server 24/7 and its results are pushed to the [`pages`](https://github.com/LOOHP/hk-bus-time-between-stops/tree/pages) branch at minute 0 every hour. The files are indexed with the first 2 characters (or the first character if there isn't a 2nd one) to strike a balance between not having one big data file and not having a few thousand small files.
+The code is being executed on an external server 24/7 and its results are pushed to the [`pages`](https://github.com/LOOHP/hk-bus-time-between-stops/tree/pages) branch at around minute 0 every hour (might be slightly delayed). The files are indexed with the first 2 characters (or the first character if there isn't a 2nd one) to strike a balance between not having one big data file and not having a few thousand small files.
 
 ### Example request
 Get the journey times to all next stops from Battery Street Jordan (**07**6E1E9D5874C41D)<br>
