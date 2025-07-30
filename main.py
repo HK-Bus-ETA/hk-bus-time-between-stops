@@ -211,7 +211,12 @@ def run():
 
         route_number = route["route"]
         chance = info[0]
-        print(f"WD{weekday} H{hour}: {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(diff / 60):.2f}':>5}mins")
+        co_display = co.upper()
+        if co.casefold() == "lightrail".casefold():
+            co_display = "LRT"
+        elif co.casefold() == "lrtfeeder".casefold():
+            co_display = "MTR-BUS"
+        print(f"WD{weekday} H{hour}: {co_display:<7} {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(diff / 60):.2f}':>5}mins")
     except Exception as e:
         print(f"Error while running for eta from {stop_id1} to {stop_id2} ({co}): {e}")
 
@@ -228,7 +233,7 @@ def run_repeatedly():
 
 
 def main():
-    num_threads = 8
+    num_threads = 4
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [executor.submit(run_repeatedly) for _ in range(num_threads)]
 
