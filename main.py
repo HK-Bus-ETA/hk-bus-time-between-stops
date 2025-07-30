@@ -17,6 +17,8 @@ hketa = HKEta()
 routes = list(hketa.route_list.items())
 file_lock = threading.Lock()
 
+previous_gmb_query = 0
+
 
 def parse_datetime(datetime_str):
     formats = ["%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"]
@@ -104,6 +106,8 @@ def read_file(file_path, stop_id1, stop_id2):
         pass
     except JSONDecodeError:
         pass
+    except Exception as e:
+        print(f"Error while reading {file_path}: {e}")
     return None
 
 
@@ -133,6 +137,8 @@ def write_file(file_path, stop_id1, stop_id2, diff, distance):
             pass
         except JSONDecodeError:
             pass
+        except Exception as e:
+            print(f"Error while reading {file_path}: {e}")
         with open(file_path, 'w') as file:
             json.dump(data, file)
 
@@ -142,6 +148,7 @@ def has_numbers(input_string):
 
 
 def roll_chance(route, info):
+    global previous_gmb_query
     route_number = route["route"]
     hour = int(current_hour())
     if not any(char.isdigit() for char in route_number):
@@ -150,8 +157,14 @@ def roll_chance(route, info):
     if 2 <= hour < 5:
         if not (route_number.startswith("N") or route_number.endswith("S")):
             chance = 0.01
+    if "gmb" in route["co"]:
+        now = round(datetime.now(timezone('Asia/Hong_Kong')).timestamp())
+        if now - previous_gmb_query < 5:
+            chance = 0
+        else:
+            previous_gmb_query = now
     info[0] = chance
-    return chance >= 1 or random.uniform(0, 1) >= chance
+    return chance > 0 and (chance >= 1 or random.uniform(0, 1) >= chance)
 
 
 def run():
@@ -172,33 +185,35 @@ def run():
     stop_id1 = stop_ids[stop_index]
     stop_id2 = stop_ids[stop_index + 1]
 
-    initial_etas = hketa.getEtas(route_id=key, seq=stop_index, language="en")
-    if not initial_etas or not initial_etas[0].get('eta'):
-        return
+    try:
+        initial_etas = hketa.getEtas(route_id=key, seq=stop_index, language="en")
+        if not initial_etas or not initial_etas[0].get('eta'):
+            return
 
-    anchor_time = parse_datetime(initial_etas[0]['eta'])
-    _, diff = find_best_match(hketa, key, stop_index, anchor_time)
+        anchor_time = parse_datetime(initial_etas[0]['eta'])
+        _, diff = find_best_match(hketa, key, stop_index, anchor_time)
 
-    if diff is None:
-        return
+        if diff is None:
+            return
 
-    pos1 = hketa.stop_list[stop_id1]["location"]
-    pos2 = hketa.stop_list[stop_id2]["location"]
-    distance = haversine(pos1["lat"], pos1["lng"], pos2["lat"], pos2["lng"])
+        pos1 = hketa.stop_list[stop_id1]["location"]
+        pos2 = hketa.stop_list[stop_id2]["location"]
+        distance = haversine(pos1["lat"], pos1["lng"], pos2["lat"], pos2["lng"])
 
-    if "lightRail" in route["co"]:
-        diff = max(120.0, diff)
+        if "lightRail" in route["co"]:
+            diff = max(120.0, diff)
 
-    prefix = stop_id1[0:2]
-    hour = current_hour()
-    weekday = current_weekday()
-    write_file(f"times/{prefix}.json", stop_id1, stop_id2, diff, distance)
-    write_file(f"times_hourly/{weekday}/{hour}/{prefix}.json", stop_id1, stop_id2, diff, distance)
+        prefix = stop_id1[0:2]
+        hour = current_hour()
+        weekday = current_weekday()
+        write_file(f"times/{prefix}.json", stop_id1, stop_id2, diff, distance)
+        write_file(f"times_hourly/{weekday}/{hour}/{prefix}.json", stop_id1, stop_id2, diff, distance)
 
-    route_number = route["route"]
-    chance = info[0]
-    print(f"WD{weekday} H{hour}: {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(diff / 60):.2f}':>5}mins")
-
+        route_number = route["route"]
+        chance = info[0]
+        print(f"WD{weekday} H{hour}: {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(diff / 60):.2f}':>5}mins")
+    except Exception as e:
+        print(f"Error while running for eta from {stop_id1} to {stop_id2} ({co}): {e}")
 
 def run_repeatedly():
     while True:
@@ -208,7 +223,7 @@ def run_repeatedly():
             print("Program terminated by user")
             break
         except Exception as e:
-            print(e)
+            print(f"Error while running: {e}")
             continue
 
 
