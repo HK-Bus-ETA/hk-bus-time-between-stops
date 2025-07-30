@@ -2,3 +2,5 @@
 *.xml
 __pycache__
 .idea
+times/
+times_hourly/

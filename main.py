@@ -10,18 +10,20 @@ from pytz import timezone
 
 from eta import HKEta
 
+MIN_SEGMENT_SECONDS = 5
+MAX_SEGMENT_SECONDS = 3600
+
 hketa = HKEta()
 routes = list(hketa.route_list.items())
 file_lock = threading.Lock()
 
 
 def parse_datetime(datetime_str):
-    formats = [
-        "%Y-%m-%dT%H:%M:%S.%f%z",
-        "%Y-%m-%dT%H:%M:%S%z"
-    ]
+    formats = ["%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"]
     for fmt in formats:
         try:
+            if datetime_str.endswith('Z'):
+                datetime_str = datetime_str[:-1] + '+0000'
             return datetime.strptime(datetime_str, fmt)
         except ValueError:
             continue
@@ -29,11 +31,33 @@ def parse_datetime(datetime_str):
     raise ValueError(f"time data '{datetime_str}' does not match any supported format")
 
 
-def seconds_diff(time1, time2):
-    dt1 = parse_datetime(time1)
-    dt2 = parse_datetime(time2)
-    delta = dt2 - dt1
-    return delta.total_seconds()
+def find_best_match(hketa, route_id, stop_index, prev_target_time):
+    etas_next = hketa.getEtas(route_id=route_id, seq=stop_index + 1, language="en")
+    if not etas_next:
+        return None, None
+
+    best_match_eta_time = None
+    smallest_diff = float('inf')
+
+    for eta in etas_next:
+        if 'eta' not in eta or eta['eta'] is None:
+            continue
+
+        current_eta_time = parse_datetime(eta['eta'])
+        if current_eta_time < prev_target_time:
+            continue
+
+        segment_seconds = (current_eta_time - prev_target_time).total_seconds()
+
+        if MIN_SEGMENT_SECONDS <= segment_seconds <= MAX_SEGMENT_SECONDS:
+            if segment_seconds < smallest_diff:
+                smallest_diff = segment_seconds
+                best_match_eta_time = current_eta_time
+
+    if best_match_eta_time:
+        return best_match_eta_time, smallest_diff
+
+    return None, None
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -147,29 +171,21 @@ def run():
 
     stop_id1 = stop_ids[stop_index]
     stop_id2 = stop_ids[stop_index + 1]
+
+    initial_etas = hketa.getEtas(route_id=key, seq=stop_index, language="en")
+    if not initial_etas or not initial_etas[0].get('eta'):
+        return
+
+    anchor_time = parse_datetime(initial_etas[0]['eta'])
+    _, diff = find_best_match(hketa, key, stop_index, anchor_time)
+
+    if diff is None:
+        return
+
     pos1 = hketa.stop_list[stop_id1]["location"]
     pos2 = hketa.stop_list[stop_id2]["location"]
     distance = haversine(pos1["lat"], pos1["lng"], pos2["lat"], pos2["lng"])
-    if distance > 1.5:
-        diff = distance / 0.013636
-    else:
-        if ("mtr" in route["co"] or "lightRail" in route["co"]) and stop_index + 2 >= len(stop_ids):
-            prefix = stop_id2[0:2]
-            diff = read_file(f"times/{prefix}.json", stop_id2, stop_id1)
-            if diff is None:
-                return
-        else:
-            etas1 = hketa.getEtas(route_id=key, seq=stop_index, language="en")
-            etas2 = hketa.getEtas(route_id=key, seq=stop_index + 1, language="en")
-            if etas1 is None or etas2 is None or len(etas1) == 0 or len(etas2) == 0 or etas1[0]["eta"] is None or \
-                    etas2[0]["eta"] is None:
-                return
-            eta_time1 = etas1[0]["eta"]
-            eta_time2 = etas2[0]["eta"]
-            diff = seconds_diff(eta_time1, eta_time2)
-    if diff < 0:
-        return
-    diff *= 1.1
+
     if "lightRail" in route["co"]:
         diff = max(120.0, diff)
 
