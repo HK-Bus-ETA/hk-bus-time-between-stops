@@ -58,40 +58,40 @@ def parse_datetime(datetime_str):
 def find_first_bus_best_match(hketa, route_id, stop_index, prev_target_time):
     etas_next = hketa.getEtas(route_id=route_id, seq=stop_index + 1, language="en")
     if not etas_next or len(etas_next) <= 0 or 'eta' not in etas_next[0] or etas_next[0]['eta'] is None or (len(etas_next) > 1 and 'eta' in etas_next[1] and etas_next[1]['eta'] is not None):
-        return None, None
+        return None
 
     etas_one_after = hketa.getEtas(route_id=route_id, seq=stop_index + 2, language="en")
     if etas_one_after and len(etas_one_after) > 0 and 'eta' in etas_one_after[0] and etas_one_after[0]['eta'] is not None:
-        return None, None
+        return None
 
     eta = etas_next[0]
     if 'eta' not in eta or eta['eta'] is None:
-        return None, None
+        return None
 
     current_eta_time = parse_datetime(eta['eta'])
     if current_eta_time < prev_target_time:
-        return None, None
+        return None
 
     segment_seconds = (current_eta_time - prev_target_time).total_seconds()
 
     if MIN_SEGMENT_SECONDS <= segment_seconds <= MAX_SEGMENT_SECONDS:
-        return current_eta_time, segment_seconds
+        return segment_seconds * 1.1
 
-    return None, None
+    return None
 
 
 def find_last_bus_best_match(hketa, route_id, stop_index, prev_target_time):
     etas_this = hketa.getEtas(route_id=route_id, seq=stop_index, language="en")
     if not etas_this or len(etas_this) <= 0 or 'eta' not in etas_this[0] or etas_this[0]['eta'] is None or (len(etas_this) > 1 and 'eta' in etas_this[1] and etas_this[1]['eta'] is not None):
-        return None, None
+        return None
 
     etas_next = hketa.getEtas(route_id=route_id, seq=stop_index + 1, language="en")
     if not etas_next:
-        return None, None
+        return None
 
     etas_previous = hketa.getEtas(route_id=route_id, seq=stop_index - 1, language="en")
     if etas_previous and len(etas_previous) > 0 and 'eta' in etas_previous[0] and etas_previous[0]['eta'] is not None:
-        return None, None
+        return None
 
     best_match_eta_time = None
     smallest_diff = float('inf')
@@ -112,21 +112,33 @@ def find_last_bus_best_match(hketa, route_id, stop_index, prev_target_time):
                 best_match_eta_time = current_eta_time
 
     if best_match_eta_time:
-        return best_match_eta_time, smallest_diff
+        return smallest_diff * 1.1
 
-    return None, None
+    return None
 
 
-def find_best_match(hketa, route_id, stop_index, prev_target_time, prefix, stop_id1, stop_id2):
+def find_best_match(hketa, route_id, stop_index, prev_target_time, prefix, stop_id1, stop_id2, route, stop_ids, distance):
+    if ("mtr" in route["co"] or "lightRail" in route["co"]) and stop_index + 2 >= len(stop_ids):
+        prefix = stop_id2[0:2]
+        return read_file(f"times/{prefix}.json", stop_id2, stop_id1)
+
     etas_next = hketa.getEtas(route_id=route_id, seq=stop_index + 1, language="en")
     if not etas_next:
-        return None, None
+        return None
 
     first_bus_diff = read_file(f"first_bus_times/{prefix}.json", stop_id1, stop_id2)
     last_bus_diff = read_file(f"last_bus_times/{prefix}.json", stop_id1, stop_id2)
 
-    min_diff = min_diff_cal(first_bus_diff, last_bus_diff, MIN_SEGMENT_SECONDS)
-    max_diff = max_diff_cal(first_bus_diff, last_bus_diff, MAX_SEGMENT_SECONDS)
+    if distance > 1.5:
+        default_diff = distance / 0.013636
+        default_min_segment_seconds = default_diff * 0.75
+        default_max_segment_seconds = default_diff * 1.25
+    else:
+        default_min_segment_seconds = MIN_SEGMENT_SECONDS
+        default_max_segment_seconds = MAX_SEGMENT_SECONDS
+
+    min_diff = min_diff_cal(first_bus_diff, last_bus_diff, default_min_segment_seconds)
+    max_diff = max_diff_cal(first_bus_diff, last_bus_diff, default_max_segment_seconds)
 
     best_match_eta_time = None
     smallest_diff = float('inf')
@@ -147,9 +159,9 @@ def find_best_match(hketa, route_id, stop_index, prev_target_time, prefix, stop_
                 best_match_eta_time = current_eta_time
 
     if best_match_eta_time:
-        return best_match_eta_time, smallest_diff
+        return smallest_diff * 1.1
 
-    return None, None
+    return None
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -289,7 +301,11 @@ def run():
 
         anchor_time = parse_datetime(initial_etas[0]['eta'])
 
-        _, first_bus_diff = find_first_bus_best_match(hketa, key, stop_index, anchor_time)
+        pos1 = hketa.stop_list[stop_id1]["location"]
+        pos2 = hketa.stop_list[stop_id2]["location"]
+        distance = haversine(pos1["lat"], pos1["lng"], pos2["lat"], pos2["lng"])
+
+        first_bus_diff = find_first_bus_best_match(hketa, key, stop_index, anchor_time)
         if first_bus_diff is not None:
             pos1 = hketa.stop_list[stop_id1]["location"]
             pos2 = hketa.stop_list[stop_id2]["location"]
@@ -311,7 +327,7 @@ def run():
                 co_display = "MTR-BUS"
             print(f"[F] WD{weekday} H{hour}: {co_display:<7} {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(first_bus_diff / 60):.2f}':>5}mins")
 
-        _, last_bus_diff = find_last_bus_best_match(hketa, key, stop_index, anchor_time)
+        last_bus_diff = find_last_bus_best_match(hketa, key, stop_index, anchor_time)
         if last_bus_diff is not None:
             pos1 = hketa.stop_list[stop_id1]["location"]
             pos2 = hketa.stop_list[stop_id2]["location"]
@@ -334,12 +350,8 @@ def run():
             print(f"[L] WD{weekday} H{hour}: {co_display:<7} {route_number:<4} [{chance:.2f}] {stop_id1:<16} > {stop_id2:<16} {f'{distance:.2f}':>5}km {f'{(last_bus_diff / 60):.2f}':>5}mins")
 
 
-        _, diff = find_best_match(hketa, key, stop_index, anchor_time, prefix, stop_id1, stop_id2)
+        diff = find_best_match(hketa, key, stop_index, anchor_time, prefix, stop_id1, stop_id2, route, stop_ids, distance)
         if diff is not None:
-            pos1 = hketa.stop_list[stop_id1]["location"]
-            pos2 = hketa.stop_list[stop_id2]["location"]
-            distance = haversine(pos1["lat"], pos1["lng"], pos2["lat"], pos2["lng"])
-
             if "lightRail" in route["co"]:
                 diff = max(120.0, diff)
 
