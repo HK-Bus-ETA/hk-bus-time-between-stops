@@ -27,3 +27,6 @@ As this is an **experimental attempt**, please **expect inaccuracies**, especial
 
 ## Credits
 Many thanks to `HK Bus Crawling@2021, https://github.com/hkbus/hk-bus-crawling`
+
+## Special Thanks
+<a href="https://ishosting.com/en/vps" title="is*hosting"><img width="130" alt="is*hosting" src="https://github.com/user-attachments/assets/f01295ce-6cfd-463f-95f7-74f75f7aad15" /></a>
